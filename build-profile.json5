@@ -3,7 +3,7 @@
     "products": [
       {
         "name": "default",
-        "compatibleSdkVersion": "5.0.0(12)",
+        "compatibleSdkVersion": "5.0.2(14)",
         "targetSdkVersion": "5.0.2(14)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
@@ -22,7 +22,7 @@
     ],
     "buildModeSet": [
       {
-        "name": "debug",
+        "name": "debug"
       },
       {
         "name": "release"
