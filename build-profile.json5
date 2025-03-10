@@ -4,7 +4,6 @@
       {
         "name": "default",
         "compatibleSdkVersion": "5.0.2(14)",
-        "targetSdkVersion": "5.0.2(14)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {
@@ -22,7 +21,7 @@
     ],
     "buildModeSet": [
       {
-        "name": "debug"
+        "name": "debug",
       },
       {
         "name": "release"
