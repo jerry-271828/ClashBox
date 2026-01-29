@@ -1,8 +1,27 @@
 {
   "app": {
+    // 产品配置
     "products": [
       {
         "name": "default",
+        "compatibleSdkVersion": "5.0.5(17)",
+        "targetSdkVersion": "6.0.0(20)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          },
+          "externalNativeOptions": {
+            "abiFilters": [
+              "arm64-v8a",
+              "x86_64"
+            ]
+          }
+        }
+      },
+      {
+        "name": "release",
         "compatibleSdkVersion": "5.0.5(17)",
         "targetSdkVersion": "6.0.0(20)",
         "runtimeOS": "HarmonyOS",
@@ -36,8 +55,10 @@
       "targets": [
         {
           "name": "default",
+          // 入口模块的产品信息配置
           "applyToProducts": [
-            "default"
+            "default",
+            "release"
           ]
         }
       ]
