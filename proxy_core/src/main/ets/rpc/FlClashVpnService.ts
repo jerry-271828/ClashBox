@@ -61,6 +61,9 @@ export class FlClashVpnService extends CommonVpnService {
   vpnConnection: vpnExtension.VpnConnection | undefined
   public configPath: string = ""
   protectSocketPath: string = ""
+  private protectSocket: socket.LocalSocket | undefined
+  private protectBuffer: string = ""
+  private protectDecoder: util.TextDecoder = new util.TextDecoder()
 
   override async onRemoteMessageRequest(client: socket.LocalSocketConnection, message: socket.LocalSocketMessageInfo): Promise<void> {
     let decoder = new util.TextDecoder()
@@ -82,8 +85,12 @@ export class FlClashVpnService extends CommonVpnService {
         case ClashRpcType.startClash: {
           startListener()
           this.startVpn().then((r) => {
+            if (!r) {
+              stopListener()
+            }
             resolve(r)
           }).catch((e: Error) => {
+            stopListener()
             reject(e)
           })
           break;
@@ -164,47 +171,93 @@ export class FlClashVpnService extends CommonVpnService {
     try {
       tunFd = await super.getTunFd(config)
       if (tunFd > -1) {
-        this.startClash(tunFd)
+        await this.startClash(tunFd)
       }
       return tunFd > -1;
     } catch (error) {
       console.error("ClashVPN  error ", error)
+      this.closeProtectSocket()
+      super.stopVpn()
       return false
     }
   }
 
-  startClash(tunFd: number) {
-    let tcp: socket.LocalSocket = socket.constructLocalSocketInstance();
-    tcp.on('message', async (value: socket.LocalSocketMessageInfo) => {
-      let text = new util.TextDecoder()
-      let dd = text.decodeToString(new Uint8Array(value.message))
-      let list = dd.split("EOF")
-      for (let index = 0; index < list.length; index++) {
-        const element = list[index];
-        try {
-          if (element != "") {
-            let json = JSON.parse(element) as RpcResult
-            let fd = JSON.parse(json.result as string) as Fd
-            await this.protect(fd.value)
-            setFdMap(fd.id)
-          }
-        } catch (e) {
-          console.error("ClashVPN protect error", e.message, element)
-        }
+  private handleProtectMessage(value: socket.LocalSocketMessageInfo): void {
+    const chunk = this.protectDecoder.decodeToString(new Uint8Array(value.message), { stream: true })
+    this.protectBuffer += chunk
+
+    let separatorIndex = this.protectBuffer.indexOf("EOF")
+    while (separatorIndex >= 0) {
+      const frame = this.protectBuffer.substring(0, separatorIndex)
+      this.protectBuffer = this.protectBuffer.substring(separatorIndex + 3)
+      if (frame.length > 0) {
+        this.protectFd(frame)
       }
+      separatorIndex = this.protectBuffer.indexOf("EOF")
+    }
+
+    if (this.protectBuffer.length > 64 * 1024) {
+      console.error("ClashVPN protect channel frame exceeded limit")
+      this.protectBuffer = ""
+    }
+  }
+
+  private async protectFd(frame: string): Promise<void> {
+    try {
+      const json = JSON.parse(frame) as RpcResult
+      const fd = JSON.parse(json.result as string) as Fd
+      await this.protect(fd.value)
+      setFdMap(fd.id)
+    } catch (e) {
+      console.error("ClashVPN protect error", e.message)
+    }
+  }
+
+  private closeProtectSocket(): void {
+    const tcp = this.protectSocket
+    this.protectSocket = undefined
+    this.protectBuffer = ""
+    this.protectDecoder = new util.TextDecoder()
+    if (tcp) {
+      tcp.close().catch((e: Error) => {
+        console.error("ClashVPN close protect channel error", e.message)
+      })
+    }
+  }
+
+  async startClash(tunFd: number): Promise<void> {
+    this.closeProtectSocket()
+    const tcp: socket.LocalSocket = socket.constructLocalSocketInstance();
+    this.protectSocket = tcp
+    tcp.on('message', (value: socket.LocalSocketMessageInfo) => {
+      this.handleProtectMessage(value)
+    })
+    tcp.on('error', (e: Error) => {
+      console.error("ClashVPN protect channel error", e.message)
+    })
+    tcp.on('close', () => {
+      if (this.protectSocket === tcp) {
+        this.protectSocket = undefined
+        this.protectBuffer = ""
+      }
+      console.warn("ClashVPN protect channel closed")
     })
     const socketPath = this.context?.filesDir + '/clash_go.sock'
     console.error("ClashVPN connect", tunFd)
-    tcp.connect({ address: { address: socketPath }, timeout: 1000 }).then(() => {
+    try {
+      await tcp.connect({ address: { address: socketPath }, timeout: 3000 })
       console.error("ClashVPN connect", tunFd)
-      tcp.send({ data: JSON.stringify({ method: ClashRpcType.startClash, params: [tunFd] }) });
-    }).catch((e) => {
+      await tcp.send({ data: JSON.stringify({ method: ClashRpcType.startClash, params: [tunFd] }) });
+    } catch (e) {
       console.error("ClashVPN  error ", e.message, e)
-    })
+      this.closeProtectSocket()
+      throw e
+    }
   }
 
 
   stopVpn() {
+    this.closeProtectSocket()
     stopTun()
     super.stopVpn()
   }

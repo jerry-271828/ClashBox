@@ -224,7 +224,6 @@ export class ConfigAutoUpdateService {
             if (this.context) {
               await Xb_NotificationUtils.publishTextNotification(
                 (this.context as common.UIAbilityContext),
-                Number(profile.id),
                 {
                   title: "ClashBox",
                   text: `${Xb_GetResourceString($r('app.string.Configuration'),
@@ -232,7 +231,8 @@ export class ConfigAutoUpdateService {
                     this.context)}`
                 },
                 notificationManager.SlotType.SERVICE_INFORMATION,
-                { abilityName: 'EntryAbility' }
+                { abilityName: 'EntryAbility' },
+                Number(profile.id)
               )
             }
 
@@ -244,19 +244,20 @@ export class ConfigAutoUpdateService {
               `配置 [${profile.name}] 无需更新，还需等待 ${remainingTime} 分钟`);
           }
         } catch (error) {
-          hilog.error(0xFF00, "ConfigAutoUpdateService", error);
+          const errorMessage: string = error instanceof Error ? error.message : `${error}`;
+          hilog.error(0xFF00, "ConfigAutoUpdateService", errorMessage);
 
           // 推送通知消息 - 失败
           if (this.context) {
             await Xb_NotificationUtils.publishTextNotification(
               (this.context as common.UIAbilityContext),
-              Number(profile.id),
               {
                 title: "ClashBox",
-                text: error
+                text: errorMessage
               },
               notificationManager.SlotType.SERVICE_INFORMATION,
-              { abilityName: 'EntryAbility' }
+              { abilityName: 'EntryAbility' },
+              Number(profile.id)
             )
           }
         }
@@ -318,4 +319,3 @@ export class ConfigAutoUpdateService {
 }
 
 export default new ConfigAutoUpdateService();
-

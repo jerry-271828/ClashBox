@@ -1,11 +1,12 @@
 {
   "app": {
-    // 产品配置
+    // 签名材料属于开发者本机配置，不提交到仓库。
+    // 需要安装或运行时，请在 DevEco Studio 中配置自己的签名。
     "products": [
       {
         "name": "default",
         "compatibleSdkVersion": "5.0.5(17)",
-        "targetSdkVersion": "6.0.0(20)",
+        "targetSdkVersion": "6.1.0(23)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {
@@ -14,8 +15,7 @@
           },
           "externalNativeOptions": {
             "abiFilters": [
-              "arm64-v8a",
-              "x86_64"
+              "arm64-v8a"
             ]
           }
         }
@@ -23,7 +23,7 @@
       {
         "name": "release",
         "compatibleSdkVersion": "5.0.5(17)",
-        "targetSdkVersion": "6.0.0(20)",
+        "targetSdkVersion": "6.1.0(23)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {
@@ -32,8 +32,7 @@
           },
           "externalNativeOptions": {
             "abiFilters": [
-              "arm64-v8a",
-              "x86_64"
+              "arm64-v8a"
             ]
           }
         }
@@ -41,7 +40,7 @@
     ],
     "buildModeSet": [
       {
-        "name": "debug",
+        "name": "debug"
       },
       {
         "name": "release"
@@ -55,7 +54,6 @@
       "targets": [
         {
           "name": "default",
-          // 入口模块的产品信息配置
           "applyToProducts": [
             "default",
             "release"
@@ -65,7 +63,7 @@
     },
     {
       "name": "proxy_core",
-      "srcPath": "./proxy_core",
+      "srcPath": "./proxy_core"
     },
     {
       "name": "xb_components",

@@ -62,7 +62,7 @@ func Start(fd int, device string, stack constant.TUNStack, dnsHijack []string) (
 		AutoDetectInterface: false,
 		Inet4Address:        prefix4,
 		Inet6Address:        prefix6,
-		MTU:                 9000,
+		MTU:                 state.DefaultMtu,
 		FileDescriptor:      fd,
 	}
 

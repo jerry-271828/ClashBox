@@ -972,7 +972,7 @@ struct Index {
         let up = '0'
         let down = '0'
         try {
-          Xb_NotificationUtils.publishTextNotification(this.context, this.noticeJob,
+          Xb_NotificationUtils.publishTextNotification(this.context,
             {
               title: `${this.appConfig.currentProxyName ?? 'ClashBox'}`,
               text: `${up}/s ↑ ${down}/s ↓`,
@@ -980,7 +980,8 @@ struct Index {
             this.uiConfig.EnabledStatusNotice ? notificationManager.SlotType.SERVICE_INFORMATION :
               notificationManager.SlotType.CONTENT_INFORMATION,
             // 服务提醒类型 -> LEVEL_HIGH; CONTENT_INFORMATION -> LEVEL_MIN
-            { abilityName: 'EntryAbility' })
+            { abilityName: 'EntryAbility' },
+            this.noticeJob)
         } catch (err) {
           hilog.info(0xFF00, 'NotificationUtils', `文本通知ID: ${this.noticeJob}发布错误: ${err} `);
         }

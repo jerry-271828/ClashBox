@@ -1906,7 +1906,7 @@
     },
     {
       "name": "settings_count_vpn",
-      "value": "VPN process has been terminated by the system"
+      "value": "Core communication recoveries detected"
     },
     {
       "name": "times",

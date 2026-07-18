@@ -4,7 +4,8 @@
     "externalNativeOptions": {
       "path": "./src/main/cpp/CMakeLists.txt",
       "arguments": "",
-      "abiFilters": ["arm64-v8a", "x86_64"],
+      // 仓库仅包含 arm64-v8a 的预编译 libflclash.so。
+      "abiFilters": ["arm64-v8a"],
       "cppFlags": ""
     },
   },

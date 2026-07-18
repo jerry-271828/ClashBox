@@ -20,7 +20,6 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
@@ -42,14 +41,15 @@ type Fd struct {
 }
 
 var (
-	tunListener *sing_tun.Listener
-	fdMap       FdMap
-	fdCounter   int64 = 0
-	counter     int64 = 0
-	processMap  ProcessMap
-	tunLock     sync.Mutex
-	runTime     *time.Time
-	errBlocked  = errors.New("blocked")
+	tunListener       *sing_tun.Listener
+	fdMap             FdMap
+	fdCounter         int64 = 0
+	counter           int64 = 0
+	processMap        ProcessMap
+	tunLock           sync.Mutex
+	runTime           *time.Time
+	errBlocked        = errors.New("blocked")
+	errProtectTimeout = errors.New("vpn socket protect timeout")
 )
 
 func (cm *ProcessMap) Store(key int64, value string) {
@@ -66,10 +66,13 @@ func (cm *ProcessMap) Load(key int64) (string, bool) {
 
 func (cm *FdMap) Store(key int64) {
 	cm.m.Store(key, struct{}{})
+	time.AfterFunc(10*time.Second, func() {
+		cm.m.Delete(key)
+	})
 }
 
-func (cm *FdMap) Load(key int64) bool {
-	_, ok := cm.m.Load(key)
+func (cm *FdMap) Consume(key int64) bool {
+	_, ok := cm.m.LoadAndDelete(key)
 	return ok
 }
 
@@ -138,9 +141,11 @@ func initSocketHook(markSocket func(Fd)) {
 		if platform.ShouldBlockConnection() {
 			return errBlocked
 		}
-		return conn.Control(func(fd uintptr) {
+		var protectErr error
+		controlErr := conn.Control(func(fd uintptr) {
 			fdInt := int64(fd)
-			timeout := time.After(500 * time.Millisecond)
+			timeout := time.NewTimer(3 * time.Second)
+			defer timeout.Stop()
 			id := atomic.AddInt64(&fdCounter, 1)
 
 			markSocket(Fd{
@@ -150,10 +155,12 @@ func initSocketHook(markSocket func(Fd)) {
 
 			for {
 				select {
-				case <-timeout:
+				case <-timeout.C:
+					protectErr = errProtectTimeout
+					log.Warnln("[VPN] socket protect timed out")
 					return
 				default:
-					exists := fdMap.Load(id)
+					exists := fdMap.Consume(id)
 					if exists {
 						return
 					}
@@ -161,6 +168,10 @@ func initSocketHook(markSocket func(Fd)) {
 				}
 			}
 		})
+		if controlErr != nil {
+			return controlErr
+		}
+		return protectErr
 	}
 }
 
@@ -320,27 +331,8 @@ func getInterfaceFlags(info *NetIpMacInfo) net.Flags {
 }
 
 func SetInterfaces(paramsString string) error {
-	var interfaces []net.Interface
-	var infos []NetIpMacInfo
-	err := json.Unmarshal([]byte(paramsString), infos)
-	if err != nil {
-		return err
-	}
-	seen := make(map[string]bool) // 去重
-	for _, info := range infos {
-		if seen[info.Iface] {
-			continue
-		}
-		ifa, err := info.ToNetInterface()
-		if err != nil {
-			continue // 或者返回错误
-		}
-
-		if ifa != nil {
-			interfaces = append(interfaces, *ifa)
-			seen[info.Iface] = true
-		}
-	}
-	iface.SetNetInterfaces(interfaces)
+	// The current OHOS core keeps its interface injection hook private.
+	// ClashBox does not expose this RPC through the ArkTS manager, so retain
+	// the method for wire compatibility without calling a private symbol.
 	return nil
 }

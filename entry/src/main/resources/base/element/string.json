@@ -1918,7 +1918,7 @@
     },
     {
       "name": "settings_count_vpn",
-      "value": "VPN进程已被系统终结"
+      "value": "检测到核心通信恢复"
     },
     {
       "name": "times",
