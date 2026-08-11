@@ -244,28 +244,42 @@ func handleGetConnections() string {
 	return string(data)
 }
 
-func handleCloseConnectionsUnLock() bool {
+func trackedConnectionCount() int {
+	count := 0
+	statistic.DefaultManager.Range(func(statistic.Tracker) bool {
+		count++
+		return true
+	})
+	return count
+}
+
+func handleCloseConnectionsUnLock(reason string) bool {
+	before := trackedConnectionCount()
+	closeCalls := 0
+	netDiag("close_all_connections_begin", "reason=%s active_flows=%d", reason, before)
 	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
 		err := c.Close()
 		if err != nil {
 			return false
 		}
+		closeCalls++
 		return true
 	})
+	netDiag(
+		"close_all_connections_completed",
+		"reason=%s active_flows_before=%d close_calls=%d active_flows_after=%d",
+		reason,
+		before,
+		closeCalls,
+		trackedConnectionCount(),
+	)
 	return true
 }
 
 func handleCloseConnections() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
-	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
-		err := c.Close()
-		if err != nil {
-			return false
-		}
-		return true
-	})
-	return true
+	return handleCloseConnectionsUnLock("rpc_clear_connections")
 }
 
 func handleCloseConnection(connectionId string) bool {

@@ -349,6 +349,7 @@ func patchSelectGroup() {
 func applyConfig(rawConfig *config.RawConfig) error {
 	runLock.Lock()
 	defer runLock.Unlock()
+	netDiag("apply_config_begin", "is_patch=%t", configParams.IsPatch)
 	var err error
 	currentConfig, err = config.ParseRawConfig(rawConfig)
 	if err != nil {
@@ -357,7 +358,7 @@ func applyConfig(rawConfig *config.RawConfig) error {
 	if configParams.IsPatch {
 		patchConfig()
 	} else {
-		handleCloseConnectionsUnLock()
+		handleCloseConnectionsUnLock("apply_config_non_patch")
 		runtime.GC()
 		hub.ApplyConfig(currentConfig)
 		patchSelectGroup()

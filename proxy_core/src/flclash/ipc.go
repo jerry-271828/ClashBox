@@ -100,6 +100,7 @@ func handleRemoteRequest(request RpcRequest, fn func(RpcResult)) {
 		Key:    request.Key,
 		Method: request.Method,
 	}
+	netDiag("ipc_request_received", "method=%d", request.Method)
 	switch request.Method {
 	case QueryTrafficNow:
 		onlyProxy := true
