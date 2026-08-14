@@ -71,3 +71,32 @@ Device-side recovery for already-broken installs: clear the app's data once
 (`bm clean -n org.xbgroup.clashboxLTS -d`) or reinstall; verified on
 HarmonyOS 7.0.0.102 that the extension then starts and survives force-stop /
 restart cycles, and the core serves RPC again (`loadConfig` succeeds).
+
+## HarmonyOS 7 debug-hap sandbox restriction — release provisioning
+
+Official Huawei forum answer (topic "Debug包访问沙箱文件失败问题处理", 2026-07-14):
+HarmonyOS 7.0 beta1 tightened sandbox permissions for **debug-signed** haps —
+after the VpnExtension process starts, sandbox file operations (including
+binding Unix sockets, `LocalSocketServer.listen`) fail with permission-denied
+errors (socket error 2301013 / errno 13). AppGallery **release** haps are
+unaffected; the system-side fix ships in HarmonyOS 7.0 beta2.
+
+Consequences for this repo:
+
+- Local DevEco builds signed with a developer **debug** certificate hit the
+  restriction: the `:vpn` extension cannot bind `clash_go.sock`/`ClashBox.sock`
+  on affected builds.
+- The OpenHarmony **test** signing material ships a `type=release` profile
+  (`app-distribution-type: os_integration`), so CI test-signed builds are
+  release-provisioned and avoid the restriction.
+
+Local build setup (DevEco Studio):
+
+- `build-profile.json5` ships a `signingConfigs.release` entry bound to
+  `signing/` (OpenHarmony test key, passwords `123456`, profile
+  `clashboxLTS-release.p7b` with `type=release`). Both products reference it,
+  so DevEco signs release-provisioned packages by default.
+- Regenerate the profile after changes: `scripts/ci/generate-test-profile.sh
+  [sdk-toolchains-lib]` (auto-detects DevEco's macOS SDK path).
+- If you have AGC release certificates, replace the `material` entries with
+  your `.p12` / `.cer` / `.p7b` and remove the shipped test profile.

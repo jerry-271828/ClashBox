@@ -1,8 +1,34 @@
 {
   "app": {
+    // 本地构建签名配置(供 DevEco Studio 直接使用)。
+    //
+    // 背景: HarmonyOS 7.0 beta1 收紧了对 debug 签发(调试证书)hap 的沙箱权限,
+    // 导致 VpnExtension 进程内 bind unix socket / 操作沙箱文件报"权限不足"
+    // (官方论坛确认, beta2 已修复; release 签发不受影响)。
+    //
+    // 这里内置了 OpenHarmony 公开测试证书签发的 release 类型 Profile
+    // (signing/clashboxLTS-release.p7b, type=release, distribution=os_integration),
+    // 使本地 DevEco 构建出来的包 provision 类型为 release, 规避该限制。
+    // 若你有华为 AGC 发布证书, 把 material 换成你的 .p12/.cer/.p7b 即可。
+    "signingConfigs": [
+      {
+        "name": "release",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "./signing/OpenHarmonyApplication.pem",
+          "storePassword": "123456",
+          "keyAlias": "openharmony application release",
+          "keyPassword": "123456",
+          "profile": "./signing/clashboxLTS-release.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "./signing/OpenHarmony.p12"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
+        "signingConfig": "release",
         "compatibleSdkVersion": "5.0.5(17)",
         "targetSdkVersion": "6.0.0(20)",
         "runtimeOS": "HarmonyOS",
@@ -20,6 +46,7 @@
       },
       {
         "name": "release",
+        "signingConfig": "release",
         "compatibleSdkVersion": "5.0.5(17)",
         "targetSdkVersion": "6.0.0(20)",
         "runtimeOS": "HarmonyOS",
