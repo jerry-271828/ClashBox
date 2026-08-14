@@ -242,8 +242,12 @@ export class SocketProxyService implements IClashManager {
       if (method == ClashRpcType.startClash || method == ClashRpcType.stopClash){
         socketPath = this.context?.filesDir + '/ClashBox.sock'
       }
-      if(!await fileIo.access(socketPath, fs.AccessModeType.EXIST))
-      {
+      // 就绪等待: 冷启动/首次启动时,扩展进程由系统异步拉起,Go 内核绑定
+      // clash_go.sock 需要数百毫秒。UI 侧(如 onPageShow 触发的首次查询)可能
+      // 在此之前就发起 RPC。这里在超时窗口内轮询等待 socket 出现,使首次请求
+      // 真正成功,而不是立刻报"VPN服务启动失败"。真故障(超时后仍不存在)仍然
+      // 会提示错误,不会被掩盖。
+      if (!await waitForSocketReady(socketPath, 3000)) {
         SocketProxyService.promptAction.showToast({message: "VPN服务启动失败"})
         reject(new Error("VPN服务未启动"))
         return;
@@ -299,6 +303,12 @@ export class SocketProxyService implements IClashManager {
         reject("失败")
       });
       const socketPath = this.context?.filesDir + '/clash_go.sock'
+      // 与 sendMessageRequest 相同: 等待核心 socket 就绪后再连接,
+      // 避免冷启动竞态导致日志流注册立刻失败。
+      if (!await waitForSocketReady(socketPath, 3000)) {
+        reject(new Error("VPN服务未启动"))
+        return;
+      }
       tcp.connect({address: { address: socketPath }, timeout:3000}).then(()=>{
         tcp.send({ data: JSON.stringify({method, params}) });
         resolve(()=>{
@@ -320,6 +330,32 @@ function debounce(func:(json: string)=>void, delay =100) {
       func(json);
     }, delay);
   };
+}
+
+/**
+ * 就绪等待: 在超时窗口内轮询等待本地 socket 文件出现。
+ * 冷启动时扩展进程由系统异步拉起,核心绑定 socket 需要时间;
+ * 这里等待其就绪,使首次 RPC 真正成功,而不是立刻失败报错。
+ * @returns true 表示 socket 已就绪; false 表示超时仍未出现。
+ */
+async function waitForSocketReady(socketPath: string | undefined, timeoutMs: number): Promise<boolean> {
+  if (socketPath == undefined) {
+    return false
+  }
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      if (await fileIo.access(socketPath, fs.AccessModeType.EXIST)) {
+        return true
+      }
+    } catch (e) {
+      // 文件尚不存在,继续等待
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 100)
+    })
+  }
+  return false
 }
 
 export default new SocketProxyService()

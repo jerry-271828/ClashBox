@@ -440,28 +440,38 @@ export class ClashViewModel {
       }, 10000)
     })
     await sleep(600)
-    let result = await this.checkVpnVpnAbility(requestId)
+    let result = await this.waitVpnAbilityReady(requestId, 5000)
     if (!result && restart) {
       ClashViewModel.promptAction.showToast({message:"VpnAbility请求失败! 请重启应用"})
     }
     return result;
   }
 
-  private async checkVpnVpnAbility(reqId: number): Promise<boolean>{
+  /**
+   * 等待扩展进程完成 onCreate 并写入本次 requestId 的锁文件(vpn_ipc.lock)。
+   * 冷启动/首次启动时扩展由系统异步拉起(数百毫秒),且上次会话遗留的旧锁文件
+   * 会让单次检查误判失败;改为有界轮询,把 ChangeCore 变成真正的就绪等待。
+   * @returns true 表示扩展已就绪; false 表示超时仍未就绪。
+   */
+  private async waitVpnAbilityReady(reqId: number, timeoutMs: number): Promise<boolean>{
     let lockPath = this.context?.filesDir + '/vpn_ipc.lock';
-    try {
-      if (!await fs.access(lockPath, fs.AccessModeType.EXIST)) {
-        console.log('ClashViewModel.checkVpnVpnAbility 检查文件vpn_ipc.lock是否存在 access成功：', true)
-        return true;
-      } else {
-        let requestId = await readText(lockPath)
-        console.log('ClashViewModel.checkVpnVpnAbility 检查文件vpn_ipc.lock是否存在 readText成功：', requestId == reqId + "")
-        return requestId == reqId + "";
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      try {
+        if (await fs.access(lockPath, fs.AccessModeType.EXIST)) {
+          let requestId = await readText(lockPath)
+          if (requestId == reqId + "") {
+            console.log('ClashViewModel.waitVpnAbilityReady 扩展已就绪 requestId=', requestId)
+            return true
+          }
+        }
+      } catch (error) {
+        // 锁文件尚未创建或读取失败,继续等待
       }
-    } catch (error) {
-      console.error('ClashViewModel.checkVpnVpnAbility 检查文件vpn_ipc.lock是否存在失败：', error)
-      return false
+      await sleep(200)
     }
+    console.warn('ClashViewModel.waitVpnAbilityReady 等待扩展就绪超时')
+    return false
   }
 
   async loadProfileAndConfig(id: string, config: ClashConfig | null = null, params: ConfigExtendedParams | null= null){
