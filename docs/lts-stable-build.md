@@ -72,31 +72,40 @@ Device-side recovery for already-broken installs: clear the app's data once
 HarmonyOS 7.0.0.102 that the extension then starts and survives force-stop /
 restart cycles, and the core serves RPC again (`loadConfig` succeeds).
 
-## HarmonyOS 7 debug-hap sandbox restriction — release provisioning
+## HarmonyOS 7 extension sandbox restriction — verified findings
 
-Official Huawei forum answer (topic "Debug包访问沙箱文件失败问题处理", 2026-07-14):
-HarmonyOS 7.0 beta1 tightened sandbox permissions for **debug-signed** haps —
-after the VpnExtension process starts, sandbox file operations (including
-binding Unix sockets, `LocalSocketServer.listen`) fail with permission-denied
-errors (socket error 2301013 / errno 13). AppGallery **release** haps are
-unaffected; the system-side fix ships in HarmonyOS 7.0 beta2.
+Symptom (HarmonyOS 7.0.0.102, Beta2, QXS-W00): with some installs the `:vpn`
+extension gets `LocalSocketServer.listen` → 2301013 "Insufficient permissions"
+(errno 13) for Unix socket binds in every app directory, so the extension-hosted
+core (mihomo) cannot start and the UI shows "vpn服务启动失败".
 
-Consequences for this repo:
+Verified on-device facts (2026-08-14):
 
-- Local DevEco builds signed with a developer **debug** certificate hit the
-  restriction: the `:vpn` extension cannot bind `clash_go.sock`/`ClashBox.sock`
-  on affected builds.
-- The OpenHarmony **test** signing material ships a `type=release` profile
-  (`app-distribution-type: os_integration`), so CI test-signed builds are
-  release-provisioned and avoid the restriction.
+- A debug-probe build logged `[BIND-PROBE] unix-*=FAIL 2301013 | tcp-*=OK`
+  for installs that carried the app `debug:false` flag together with a debug
+  certificate (manually signed release-mode HAPs).
+- A DevEco default build (debug build mode, automatic signing with the Huawei
+  developer debug certificate) reports `debug:true` and the probe flips to
+  `unix-filesDir=OK | unix-cacheDir=OK | unix-tempDir=OK | unix-databaseDir=OK`.
+  The full mihomo pipeline then works (bind sockets, create TUN, hand fd to the
+  core).
+- The store build (release provision, app_gallery) was never restricted.
 
-Local build setup (DevEco Studio):
+Conclusion: on this device the operative lever was the HAP debug flag /
+build mode, not the certificate type. The Huawei forum answer
+("Debug包访问沙箱文件失败问题处理") describes the 7.0 beta1 debug-hap
+tightening; on Beta2 the remaining reproducible restriction hit
+release-mode-claimed (`debug:false`) HAPs signed with debug certificates.
+The exact policy is not fully pinned down.
 
-- `build-profile.json5` ships a `signingConfigs.release` entry bound to
-  `signing/` (OpenHarmony test key, passwords `123456`, profile
-  `clashboxLTS-release.p7b` with `type=release`). Both products reference it,
-  so DevEco signs release-provisioned packages by default.
-- Regenerate the profile after changes: `scripts/ci/generate-test-profile.sh
-  [sdk-toolchains-lib]` (auto-detects DevEco's macOS SDK path).
-- If you have AGC release certificates, replace the `material` entries with
-  your `.p12` / `.cer` / `.p7b` and remove the shipped test profile.
+Practical guidance:
+
+- Local use on HarmonyOS 7: build with DevEco Studio's default flow
+  (debug build + automatic signing). This is what works.
+- `build-profile.json5` ships a `signingConfigs.release` scaffold; DevEco's
+  Signing Configs UI fills in your own material (paths are machine-local and
+  must not be committed). Replace with AGC release certificates if available.
+- CI note: the CI assembles with `buildMode=release` (`debug:false`). Its
+  OpenHarmony test-signed output (type=release profile) was not re-tested
+  for the mihomo mode on HarmonyOS 7 after the stale-socket fixes — verify
+  before relying on CI builds there.
