@@ -17,7 +17,11 @@ func startIpcProxy(path string) {
 	}
 	listener, err := net.Listen("unix", path)
 	if err != nil {
+		// bind 失败时 listener 为 nil，继续向下 defer listener.Close() 会触发
+		// nil 指针 panic，进而被 DFX 判定为 CppCrash 杀掉整个扩展进程。
+		// 这里改为记录错误并退出当前 goroutine，让上层可以正常报错/重试。
 		log.Println("ipc_go", err)
+		return
 	}
 	defer listener.Close()
 	log.Println("ipc_go", "Server is listening on", path)

@@ -404,6 +404,27 @@ export class ClashViewModel {
       } catch (error) {
         console.error(`ClashViewModel.ChangeCore restart过程中VPN进程终止失败: ${JSON.stringify(error)}`)
       }
+      // 清理上次进程遗留的陈旧 socket 文件(仅 mihomo 内核路径)。
+      // mihomo(新内核)的核心运行在 VPN 扩展进程:鸿蒙7 上扩展进程无法删除
+      // filesDir 中由 UI 进程或历史会话创建的 socket 文件,若残留则 bind 报
+      // EADDRINUSE,旧版 Go 代码 nil listener panic 崩溃 → 界面提示
+      // Connection refused,且每次启动重复崩溃。由 UI 进程在启动扩展前清理即可自愈。
+      // 前台模式(ClashMeta)核心运行在 UI 进程,其 socket 可能正在使用,不能在此删除。
+      if (coreType == undefined || coreType == ClashCore.mihomo) {
+        const staleSocketPaths: (string | undefined)[] = [
+          this.context?.filesDir + '/clash_go.sock',
+          this.context?.filesDir + '/ClashBox.sock'
+        ]
+        staleSocketPaths.forEach((p: string | undefined) => {
+          try {
+            if (p != undefined) {
+              fs.unlinkSync(p)
+            }
+          } catch (e) {
+            console.warn(`ClashViewModel.ChangeCore 清理陈旧 socket ${p} 失败: ${JSON.stringify(e)}`)
+          }
+        })
+      }
     }
     await new Promise<boolean>( async (resolve, reject)=>{
       try {
