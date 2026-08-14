@@ -17,6 +17,7 @@ export class SocketStubService {
   }
 
   async startService(){
+    await this.probeBindCapabilities()
     try {
       const socketPath = this.vpnService.context.filesDir + '/ClashBox.sock'
       const goPath = this.vpnService.context.filesDir + '/clash_go.sock'
@@ -45,6 +46,60 @@ export class SocketStubService {
     } catch (e) {
       console.error("socket failure", e.message)
     }
+  }
+
+  /**
+   * 鸿蒙7诊断:检测 VPN 扩展进程在沙箱内可用的 IPC 传输方式。
+   * 结果以 [BIND-PROBE] 前缀输出到 hilog。
+   */
+  async probeBindCapabilities() {
+    const results: string[] = []
+    // 1) unix socket 在不同应用目录
+    const dirNames: string[] = ['filesDir', 'cacheDir', 'tempDir', 'databaseDir']
+    const dirPaths: (string | undefined)[] = [
+      this.vpnService.context.filesDir,
+      this.vpnService.context.cacheDir,
+      this.vpnService.context.tempDir,
+      this.vpnService.context.databaseDir,
+    ]
+    for (let i = 0; i < dirNames.length; i++) {
+      const name = dirNames[i]
+      const dir = dirPaths[i]
+      if (dir == undefined) {
+        results.push(`unix-${name}=NODIR`)
+        continue
+      }
+      const p = dir + '/probe_' + name + '.sock'
+      const s = socket.constructLocalSocketServerInstance()
+      try {
+        await s.listen({ address: p })
+        results.push(`unix-${name}=OK`)
+        s.close()
+      } catch (e) {
+        results.push(`unix-${name}=FAIL ${JSON.stringify(e)}`)
+      }
+      try {
+        fs.unlinkSync(p)
+      } catch (e) {
+        // ignore
+      }
+    }
+    // 2) TCP 监听
+    const tcpNames: string[] = ['tcp-any', 'tcp-loopback']
+    const tcpAddrs: string[] = ['0.0.0.0', '127.0.0.1']
+    for (let i = 0; i < tcpNames.length; i++) {
+      const name = tcpNames[i]
+      const addr: socket.NetAddress = { address: tcpAddrs[i], port: 0, family: 1 }
+      const t = socket.constructTCPSocketServerInstance()
+      try {
+        await t.listen(addr)
+        results.push(`${name}=OK`)
+        t.close()
+      } catch (e) {
+        results.push(`${name}=FAIL ${JSON.stringify(e)}`)
+      }
+    }
+    console.error(`[BIND-PROBE] ${results.join(' | ')}`)
   }
   startVpn(){
     this.vpnService.startVpn()
