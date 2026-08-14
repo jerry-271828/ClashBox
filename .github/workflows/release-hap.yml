@@ -337,7 +337,7 @@ jobs:
           ohpm config set registry https://ohpm.openharmony.cn/ohpm/
           ohpm install --all
 
-      - name: Assemble unsigned release HAP
+      - name: Assemble release HAP
         run: |
           hvigorw clean --no-daemon --no-parallel
           hvigorw assembleHap \
@@ -348,16 +348,18 @@ jobs:
             --no-parallel \
             --stacktrace
 
-      - name: Locate unsigned HAP
+      - name: Locate built HAP
         id: unsigned
         shell: bash
         run: |
+          # hvigor may sign during assembleHap when build-profile.json5 declares
+          # signingConfigs; accept either unsigned or signed output.
           mapfile -t haps < <(
-            find entry/build -type f -name '*-unsigned.hap' -print |
+            find entry/build -type f \( -name '*-unsigned.hap' -o -name '*-signed.hap' \) -print |
               sort
           )
           if [[ "${#haps[@]}" -ne 1 ]]; then
-            printf 'Expected exactly one unsigned HAP, found %s:\n' "${#haps[@]}" >&2
+            printf 'Expected exactly one built HAP, found %s:\n' "${#haps[@]}" >&2
             printf '  %s\n' "${haps[@]:-<none>}" >&2
             exit 1
           fi
@@ -370,16 +372,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          unsigned_hap="${{ steps.unsigned.outputs.hap }}"
-          test -s "$unsigned_hap"
+          built_hap="${{ steps.unsigned.outputs.hap }}"
+          test -s "$built_hap"
 
           version="$(sed -n 's/.*"versionName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' AppScope/app.json5 | head -n 1)"
           test -n "$version"
           sha7="${GITHUB_SHA:0:7}"
-          hap_filename="ClashBox-${version}-${sha7}-unsigned.hap"
+          if [[ "$built_hap" == *-signed.hap ]]; then
+            hap_filename="ClashBox-${version}-${sha7}-signed.hap"
+            signing="openharmony-test-release"
+          else
+            hap_filename="ClashBox-${version}-${sha7}-unsigned.hap"
+            signing="none"
+          fi
 
           mkdir -p artifacts
-          cp -f "$unsigned_hap" "artifacts/$hap_filename"
+          cp -f "$built_hap" "artifacts/$hap_filename"
           (
             cd artifacts
             sha256sum "$hap_filename" | tee SHA256SUMS
@@ -387,17 +395,25 @@ jobs:
               echo "commit=$GITHUB_SHA"
               echo "bundle=$HAP_BUNDLE_NAME"
               echo "version=$version"
-              echo "signing=none"
+              echo "signing=$signing"
             } > build-metadata.txt
-            printf '%s\n' \
-              'This HAP is UNSIGNED and cannot be installed on commercial HarmonyOS devices' \
-              'as-is. Re-sign it with a Huawei developer certificate in DevEco Studio or with' \
-              'hap-sign-tool before installing (see docs/ci-hap-signing.md). Signed builds are' \
-              'available from the build-core workflow.' \
-              '' \
-              '未签名 HAP：无法直接安装到商用 HarmonyOS 设备。安装前请使用华为开发者证书' \
-              '在 DevEco Studio 或 hap-sign-tool 中重新签名（参见 docs/ci-hap-signing.md）。' \
-              > INSTALLATION-NOTES.txt
+            if [[ "$signing" == "none" ]]; then
+              printf '%s\n' \
+                'This HAP is UNSIGNED and cannot be installed on commercial HarmonyOS devices' \
+                'as-is. Re-sign it with a Huawei developer certificate in DevEco Studio or with' \
+                'hap-sign-tool before installing (see docs/ci-hap-signing.md). Signed builds are' \
+                'available from the build-core workflow.' \
+                '' \
+                '未签名 HAP：无法直接安装到商用 HarmonyOS 设备。安装前请使用华为开发者证书' \
+                '在 DevEco Studio 或 hap-sign-tool 中重新签名（参见 docs/ci-hap-signing.md）。' \
+                > INSTALLATION-NOTES.txt
+            else
+              printf '%s\n' \
+                'This HAP was signed by hvigor with the repository signingConfigs.release' \
+                '(public OpenHarmony test key + type=release profile). The release-type' \
+                'provision avoids the HarmonyOS 7.0 beta1 debug-hap sandbox restriction.' \
+                > INSTALLATION-NOTES.txt
+            fi
           )
 
           checksum="$(cut -d ' ' -f 1 artifacts/SHA256SUMS)"

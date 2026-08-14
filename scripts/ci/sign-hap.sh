@@ -111,6 +111,16 @@ else
 fi
 
 signed_hap="$artifact_dir/$output_basename"
+if [[ "$unsigned_hap" == *-signed.hap ]]; then
+  # hvigor already signed this HAP via the repo's build-profile.json5
+  # signingConfigs (OpenHarmony test key, type=release profile). Re-signing an
+  # already-signed HAP is not supported; verify and stage it verbatim.
+  signing_mode="repo-signing-config"
+  output_basename="ClashBox-${GITHUB_SHA:0:12}-repo-signed.hap"
+  signed_hap="$artifact_dir/$output_basename"
+  mkdir -p "$artifact_dir"
+  cp -f "$unsigned_hap" "$signed_hap"
+else
 "${sign_command[@]}" sign-app \
   -mode localSign \
   -keyAlias "$key_alias" \
@@ -126,6 +136,7 @@ signed_hap="$artifact_dir/$output_basename"
   -keystorePwd "$store_password" \
   -signCode 1 \
   -outFile "$signed_hap"
+fi
 
 test -s "$signed_hap"
 verification_cert="$signing_dir/verified-certificate-chain.cer"
@@ -170,6 +181,13 @@ Commercial HarmonyOS devices require a Huawei developer certificate, profile,
 keystore, alias and passwords configured as GitHub Actions secrets.
 EOF
   artifact_name="ClashBox-openharmony-test-signed-hap"
+elif [[ "$signing_mode" == "repo-signing-config" ]]; then
+  cat > "$artifact_dir/INSTALLATION-NOTES.txt" <<'EOF'
+This HAP was signed by hvigor with the repository's signingConfigs.release
+(public OpenHarmony test key + type=release profile). The release-type
+provision avoids the HarmonyOS 7.0 beta1 debug-hap sandbox restriction.
+EOF
+  artifact_name="ClashBox-repo-signed-hap"
 else
   artifact_name="ClashBox-huawei-signed-hap"
 fi

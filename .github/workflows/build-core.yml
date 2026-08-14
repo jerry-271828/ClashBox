@@ -339,7 +339,7 @@ jobs:
       - name: Install OHPM dependencies
         run: ohpm install --all
 
-      - name: Assemble unsigned release HAP
+      - name: Assemble release HAP
         run: |
           hvigorw clean --no-daemon --no-parallel
           hvigorw assembleHap \
@@ -350,16 +350,19 @@ jobs:
             --no-parallel \
             --stacktrace
 
-      - name: Locate unsigned HAP
+      - name: Locate built HAP
         id: unsigned
         shell: bash
         run: |
+          # hvigor may sign during assembleHap when build-profile.json5 declares
+          # signingConfigs; accept either unsigned or signed output. sign-hap.sh
+          # handles both (re-signs unsigned, verifies+stages signed).
           mapfile -t haps < <(
-            find entry/build -type f -name '*-unsigned.hap' -print |
+            find entry/build -type f \( -name '*-unsigned.hap' -o -name '*-signed.hap' \) -print |
               sort
           )
           if [[ "${#haps[@]}" -ne 1 ]]; then
-            printf 'Expected exactly one unsigned HAP, found %s:\n' "${#haps[@]}" >&2
+            printf 'Expected exactly one built HAP, found %s:\n' "${#haps[@]}" >&2
             printf '  %s\n' "${haps[@]:-<none>}" >&2
             exit 1
           fi
