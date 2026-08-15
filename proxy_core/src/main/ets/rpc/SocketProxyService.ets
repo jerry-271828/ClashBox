@@ -6,7 +6,7 @@ import { ClashRpcType, IClashManager, VpnRawOptions } from './IClashManager';
 import { ConnectionInfo, IpInfo, LogInfo, Provider, ProxyGroup, ProxyMode,
   Traffic } from '../models/Common';
 import  fs from  "@ohos.file.fs"
-import { fileIo, fileUri } from "@kit.CoreFileKit";
+import { fileUri } from "@kit.CoreFileKit";
 import { PromptAction } from '@kit.ArkUI';
 import { UpdateConfigParams } from '../models/ClashConfig';
 import { checkIp, queryCurrentIpInfo } from '../Request';
@@ -243,11 +243,11 @@ export class SocketProxyService implements IClashManager {
         socketPath = this.context?.filesDir + '/ClashBox.sock'
       }
       // 就绪等待: 冷启动/首次启动时,扩展进程由系统异步拉起,Go 内核绑定
-      // clash_go.sock 需要数百毫秒。UI 侧(如 onPageShow 触发的首次查询)可能
-      // 在此之前就发起 RPC。这里在超时窗口内轮询等待 socket 出现,使首次请求
-      // 真正成功,而不是立刻报"VPN服务启动失败"。真故障(超时后仍不存在)仍然
-      // 会提示错误,不会被掩盖。
-      if (!await waitForSocketReady(socketPath, 3000)) {
+      // clash_go.sock 需要数百毫秒;期间该路径可能是"不存在",也可能是
+      // 上次会话遗留的陈旧文件(无监听者,连接会被拒)。因此以"能否成功建立
+      // 连接"作为就绪信号,在超时窗口内重试探测;就绪后再发真实请求。
+      // 真故障(超时仍连不上)仍会提示错误,不会被掩盖。
+      if (!await waitForSocketAccepting(socketPath, 3000)) {
         SocketProxyService.promptAction.showToast({message: "VPN服务启动失败"})
         reject(new Error("VPN服务未启动"))
         return;
@@ -303,9 +303,9 @@ export class SocketProxyService implements IClashManager {
         reject("失败")
       });
       const socketPath = this.context?.filesDir + '/clash_go.sock'
-      // 与 sendMessageRequest 相同: 等待核心 socket 就绪后再连接,
-      // 避免冷启动竞态导致日志流注册立刻失败。
-      if (!await waitForSocketReady(socketPath, 3000)) {
+      // 与 sendMessageRequest 相同: 以"可连接"为准等待核心就绪,
+      // 避免冷启动竞态(文件不存在或陈旧文件无监听者)导致日志流注册立刻失败。
+      if (!await waitForSocketAccepting(socketPath, 3000)) {
         reject(new Error("VPN服务未启动"))
         return;
       }
@@ -333,27 +333,34 @@ function debounce(func:(json: string)=>void, delay =100) {
 }
 
 /**
- * 就绪等待: 在超时窗口内轮询等待本地 socket 文件出现。
- * 冷启动时扩展进程由系统异步拉起,核心绑定 socket 需要时间;
- * 这里等待其就绪,使首次 RPC 真正成功,而不是立刻失败报错。
- * @returns true 表示 socket 已就绪; false 表示超时仍未出现。
+ * 就绪等待: 在超时窗口内轮询探测本地 socket 是否可连接。
+ * 冷启动时扩展进程由系统异步拉起,期间 socket 路径可能不存在,
+ * 也可能是上次会话遗留的陈旧文件(路径存在但无监听者,connect 返回
+ * ECONNREFUSED)。只有"成功建立连接"才算就绪;探测连接会立刻关闭。
+ * @returns true 表示已有监听者; false 表示超时仍未就绪。
  */
-async function waitForSocketReady(socketPath: string | undefined, timeoutMs: number): Promise<boolean> {
+async function waitForSocketAccepting(socketPath: string | undefined, timeoutMs: number): Promise<boolean> {
   if (socketPath == undefined) {
     return false
   }
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    const probe = socket.constructLocalSocketInstance()
     try {
-      if (await fileIo.access(socketPath, fs.AccessModeType.EXIST)) {
-        return true
-      }
+      await probe.connect({ address: { address: socketPath }, timeout: 500 })
+      probe.close()
+      return true
     } catch (e) {
-      // 文件尚不存在,继续等待
+      try {
+        probe.close()
+      } catch (closeErr) {
+        // ignore
+      }
+      // 尚未就绪(文件不存在或陈旧文件无监听者),继续重试
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 100)
+      })
     }
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 100)
-    })
   }
   return false
 }

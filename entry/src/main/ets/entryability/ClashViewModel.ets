@@ -380,7 +380,8 @@ export class ClashViewModel {
     } catch (e) {
       console.error(" 获取代理失败: ", e.stack)
       if (!silent) {
-        ClashViewModel.promptAction.showToast({message: "获取代理失败: " + (e.message || e) + e.stack})
+        // e.stack 可能缺失(如纯字符串 reject),用 ?? '' 兜底避免拼出 "undefined"
+        ClashViewModel.promptAction.showToast({message: "获取代理失败: " + (e.message || e) + (e.stack ?? '')})
       }
     }
     return []
