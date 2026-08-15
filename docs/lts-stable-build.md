@@ -101,10 +101,10 @@ The exact policy is not fully pinned down.
 Practical guidance:
 
 - Local use on HarmonyOS 7: build with DevEco Studio's default flow
-  (debug build + automatic signing). This is what works.
-- `build-profile.json5` ships a `signingConfigs.release` scaffold; DevEco's
-  Signing Configs UI fills in your own material (paths are machine-local and
-  must not be committed). Replace with AGC release certificates if available.
+  (debug build + automatic signing). This is what works. Local signing is
+  configured per-machine via DevEco's Project Structure > Signing Configs
+  (it writes machine-local paths and encrypted passwords into
+  `build-profile.json5`; those changes must stay uncommitted).
 - CI: both workflows now assemble with `buildMode=debug` (HAP carries
   `debug:true`, matching the verified-working DevEco default build).
   - Best fidelity: configure the six `HAP_SIGNING_*` secrets with your own

@@ -15,12 +15,7 @@
 **/.test
 /.appanalyzer
 .DS_store
-/signing/*
-!/signing/OpenHarmony.p12
-!/signing/OpenHarmonyApplication.pem
-!/signing/OpenHarmonyProfileRelease.pem
-!/signing/clashboxLTS-release.p7b
-!/signing/UnsgnedReleasedProfileTemplate.json
+/signing
 /node_modules
 /oh_modules
 /local.properties
