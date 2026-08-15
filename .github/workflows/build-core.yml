@@ -339,13 +339,16 @@ jobs:
       - name: Install OHPM dependencies
         run: ohpm install --all
 
-      - name: Assemble release HAP
+      - name: Assemble debug-mode HAP
         run: |
+          # 用 debug 构建模式: 与 DevEco 默认构建一致(HAP 带 debug:true)。
+          # 鸿蒙7 上 debug:false(release-mode 构建)+ 调试证书的组合会触发
+          # VPN 扩展沙箱限制(unix socket bind 权限不足);debug:true 组合实测正常。
           hvigorw clean --no-daemon --no-parallel
           hvigorw assembleHap \
             --mode module \
             -p product=default \
-            -p buildMode=release \
+            -p buildMode=debug \
             --no-daemon \
             --no-parallel \
             --stacktrace

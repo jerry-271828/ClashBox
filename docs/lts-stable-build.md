@@ -105,7 +105,13 @@ Practical guidance:
 - `build-profile.json5` ships a `signingConfigs.release` scaffold; DevEco's
   Signing Configs UI fills in your own material (paths are machine-local and
   must not be committed). Replace with AGC release certificates if available.
-- CI note: the CI assembles with `buildMode=release` (`debug:false`). Its
-  OpenHarmony test-signed output (type=release profile) was not re-tested
-  for the mihomo mode on HarmonyOS 7 after the stale-socket fixes — verify
-  before relying on CI builds there.
+- CI: both workflows now assemble with `buildMode=debug` (HAP carries
+  `debug:true`, matching the verified-working DevEco default build).
+  - Best fidelity: configure the six `HAP_SIGNING_*` secrets with your own
+    Huawei debug-certificate material (the same `.p12`/`.cer`/`.p7b` DevEco
+    uses) — CI output then equals the locally verified combination.
+  - Fallback (no secrets): the OpenHarmony test key with the `type=release`
+    profile (kept release-type on purpose — the debug-type test template
+    hardcodes foreign device-ids and would not install). This combination
+    installs on developer-mode devices but was not re-verified for the
+    mihomo mode on HarmonyOS 7; verify once before relying on it.

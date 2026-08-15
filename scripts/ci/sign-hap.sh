@@ -82,6 +82,9 @@ elif [[ "$configured_secret_count" -eq 0 ]]; then
     fi
   done
 
+  # 测试签名兜底保持 release 类型 profile(而非 debug 模板):
+  # debug 模板硬编码了外国测试设备的 udid,签出的包装不到本设备上;
+  # release 类型 profile 无设备绑定,可在开发者模式设备上安装。
   node scripts/ci/create-openharmony-profile.mjs \
     "$test_signing_dist/UnsgnedReleasedProfileTemplate.json" \
     "$signing_dir/profile.json" \
